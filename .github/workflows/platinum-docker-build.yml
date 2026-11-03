@@ -43,6 +43,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Paperclip
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -54,7 +55,27 @@ jobs:
           build-args: |
             PAPERCLIP_BUILD_COMMIT=${{ github.sha }}
 
-      - name: Display published image
+      - name: Display published image and immutable digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
         run: |
-          echo "Image:"
-          echo "ghcr.io/platinum-automations/paperclip:sha-${GITHUB_SHA}"
+          # AzureBuild-MCPAgent pins Paperclip by digest (PAPERCLIP_IMAGE in deploy/release.env).
+          ref="ghcr.io/platinum-automations/paperclip@${DIGEST}"
+          echo "Tag:    ghcr.io/platinum-automations/paperclip:sha-${GITHUB_SHA}"
+          echo "Digest: ${ref}"
+          {
+            echo "### Paperclip image"
+            echo "- Tag: \`ghcr.io/platinum-automations/paperclip:sha-${GITHUB_SHA}\`"
+            echo "- Pin in AzureBuild-MCPAgent \`deploy/release.env\`:"
+            echo ""
+            echo "\`\`\`"
+            echo "PAPERCLIP_IMAGE=${ref}"
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "$ref" > image-digest.txt
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: paperclip-image-digest
+          path: image-digest.txt
